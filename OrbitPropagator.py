@@ -54,7 +54,7 @@ class OrbitPropagator:
             self.ts[self.step] = self.solver.t
             self.ys[self.step] = self.solver.y
             self.step += 1
-            print(self.solver.y[:3])
+            # print(self.solver.y[:3]) # Use only for debugging
 
         self.rs = self.ys[:,:3]
         self.vs = self.ys[:,3:]
@@ -97,11 +97,14 @@ class OrbitPropagator:
         # Drag perturbation
         if self.perturbations['Drag']:
             self.z = (self.norm_r - self.cb['radius']) * 1000.0
-            self.ds = ussa1976.compute(z=np.array([self.z]), variables=["rho"])
-            self.rho = self.ds["rho"].values[0]*1e9
-            self.vrel = self.v - np.cross(self.cb['at_rot_vec'], self.r)
-            self.a_drag = -((0.5 * self.rho * self.ob['Cd'] * self.ob['Area']) / self.ob['mass']) * np.linalg.norm(self.vrel) * self.vrel
-            self.a += self.a_drag
+            if self.z < 1000000:
+                self.ds = ussa1976.compute(z=np.array([self.z]), variables=["rho"])
+                self.rho = self.ds["rho"].values[0]*1e9
+                self.vrel = self.v - np.cross(self.cb['at_rot_vec'], self.r)
+                self.a_drag = -((0.5 * self.rho * self.ob['Cd'] * self.ob['Drag_Area']) / self.ob['mass']) * np.linalg.norm(self.vrel) * self.vrel
+                self.a += self.a_drag
+            else:
+                self.a = self.a
 
         return [self.vx, self.vy, self.vz, self.a[0], self.a[1], self.a[2]]
     

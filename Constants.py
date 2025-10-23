@@ -15,14 +15,18 @@ Earth = {
 
 Satellite = {
     'name' : 'Satellite',
-    'mass' : 1.333, # kg
+    'mass' : 25, # kg
     'Cd' : 2.2,
-    'Area' : 1e-7 # km^2
+    'Drag_Area' : 1e-7, # km^2
+    'HBR_Radius' : 0.01, # km
+    'Covarience_Matrix' : np.diag([1, 1, 1]) # km^2
 }
 
 Debri = {
     'name' : 'Satellite',
-    'mass' : 1.333, # kg
+    'mass' : 25, # kg
     'Cd' : 2.2,
-    'Area' : 1e-7 # km^2
+    'Drag_Area' : 1e-7, # km^2
+    'HBR_Radius' : 0.1, # km
+    'Covarience_Matrix' : np.diag([3, 3, 3]) # km^2
 }
