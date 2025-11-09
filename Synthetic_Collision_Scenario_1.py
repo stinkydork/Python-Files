@@ -3,9 +3,6 @@ from OrbitPropagator import OrbitPropagator, null_perturbations
 import Constants as ct
 import time
 
-# This scenario is from a research paper.
-# Source - https://digitalcommons.usu.edu/cgi/viewcontent.cgi?article=6317&context=smallsat
-
 if __name__ == '__main__':
     start_time = time.time()
     print("Orbit propagator is running", flush=True)
@@ -14,17 +11,17 @@ if __name__ == '__main__':
     r0_S, v0_S = OrbitPropagator.Kep2State(6880, 0, 51.6, 0, 0, 0, cb=ct.Earth)
 
     # Initial conditions of debri
-    r0_D, v0_D = OrbitPropagator.Kep2State(6880, 0, 97.8, 350, 187, 180.00415, cb=ct.Earth)
+    r0_D, v0_D = OrbitPropagator.Kep2State(6874.43, 0.0081, 128.42, 177.64, 335.46, 341.14, cb=ct.Earth)
 
     # Time span and time step
-    tspan = (100) * (60*60) # hours
+    tspan = (20) * (60*60) # hours
     dt = 10 # seconds
 
     # Propagate orbit
     perturbations = null_perturbations()
-    perturbations['J2'] = False
+    perturbations['J2'] = True
     perturbations['J3'] = False
-    perturbations['Drag'] = False
+    perturbations['Drag'] = True
     ob_S = OrbitPropagator(r0_S,v0_S,tspan,dt,cb=ct.Earth,ob=ct.Satellite,perturbations=perturbations)
     ob_D = OrbitPropagator(r0_D,v0_D,tspan,dt,cb=ct.Earth,ob=ct.Debri,perturbations=perturbations)
     end_time = time.time()

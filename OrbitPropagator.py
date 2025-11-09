@@ -11,7 +11,8 @@ def null_perturbations():
     return {
         'J2' : False,
         'J3' : False,
-        'Drag' : False
+        'Drag' : False,
+        'Maneuver' : False
     }
 
 # Standard Unit of Distance is Kilometers.
@@ -19,13 +20,17 @@ class OrbitPropagator:
     # Integrater Function
     # Using DOP853 method.
     # Source - http://www.youtube.com/@alfonsogonzalez-astrodynam2207
-    def __init__(self,r0,v0,tspan,dt,cb,ob,perturbations=null_perturbations()):
+    def __init__(self,r0,v0,tspan,dt,cb,ob,maneuver_start_time=0,maneuver_end_time=0,thrust=0,thrust_direction=0,perturbations=null_perturbations()):
         self.r0 = r0
         self.v0 = v0
         self.tspan = tspan
         self.dt = dt
         self.cb = cb
         self.ob = ob
+        self.maneuver_start_time = maneuver_start_time
+        self.maneuver_end_time = maneuver_end_time
+        self.thrust = thrust
+        self.thrust_direction = thrust_direction
 
         # Total number of steps
         self.n_steps=int(np.ceil(self.tspan/self.dt))
@@ -54,7 +59,7 @@ class OrbitPropagator:
             self.ts[self.step] = self.solver.t
             self.ys[self.step] = self.solver.y
             self.step += 1
-            # print(self.solver.y[:3]) # Use only for debugging
+            print(self.solver.y[:3], self.step) # Use only for debugging
 
         self.rs = self.ys[:,:3]
         self.vs = self.ys[:,3:]
@@ -71,6 +76,7 @@ class OrbitPropagator:
         self.rx, self.ry, self.rz, self.vx, self.vy, self.vz = y
         self.r = np.array([self.rx, self.ry, self.rz])
         self.v = np.array([self.vx, self.vy, self.vz])
+        self.thrust_direction = np.array([self.vx, self.vy, self.vz]) / np.linalg.norm(self.v)
 
         # Norm of the position vector
         self.norm_r = np.linalg.norm(self.r)
@@ -105,6 +111,11 @@ class OrbitPropagator:
                 self.a += self.a_drag
             else:
                 self.a = self.a
+
+        # Maneuver
+        if self.perturbations['Maneuver']:
+            self.a_maneuver = (self.thrust / self.ob['mass']) * self.thrust_direction
+            self.a += self.a_maneuver
 
         return [self.vx, self.vy, self.vz, self.a[0], self.a[1], self.a[2]]
     
