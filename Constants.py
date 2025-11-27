@@ -13,12 +13,27 @@ Earth = {
     'at_rot_vec' : np.array([0,0,7.29211e-5]) # rad / s
 }
 
+# Made-up CubeSat
+CubeSat = {
+    'name' : 'CubeSat',
+    'mass' : 1.5, # kg
+    'Cd' : 2.2, # (Not Sure)
+    'Drag_Area' : 9e-8, # km^2
+    'SRP_Area' : 9e-8, # km^2
+    'HBR_Radius' : 0.0003, # km
+    'Covarience_Matrix' : np.diag([0.1, 0.1, 0.1]), # km^2
+    # Source - https://www.space-propulsion.com/spacecraft-propulsion/hydrazine-thrusters/20n-hydrazine-thruster.html
+    'Impluse' : 230, # seconds
+    'Thrust' : 0.02 # kN
+}
+
 # Made-up Data (Based on Starlink v2 mini)
 Satellite = {
     'name' : 'Satellite',
     'mass' : 800, # kg
     'Cd' : 2.2, # (Not Sure)
-    'Drag_Area' : 1.08e-5, # km^2 
+    'Drag_Area' : 1.08e-5, # km^2
+    'SRP_Area' : 1.08e-5, # km^2
     'HBR_Radius' : 0.004, # km
     'Covarience_Matrix' : np.diag([0.1, 0.1, 0.1]), # km^2
     # Source - https://www.space-propulsion.com/spacecraft-propulsion/hydrazine-thrusters/20n-hydrazine-thruster.html

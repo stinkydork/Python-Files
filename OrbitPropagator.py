@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 from scipy.integrate import ode
 import Constants as ct
 import ussa1976
+import spiceypy as spice
+import os
 plt.style.use('dark_background')
 
 # For selecting which type of perturbation is needed.
@@ -12,25 +14,44 @@ def null_perturbations():
         'J2' : False,
         'J3' : False,
         'Drag' : False,
-        'Maneuver' : False
+        'SRP' : False,
+        'External Thrust' : False
     }
 
+
+# Kernels for NASA Spice files.
+KERNEL_DIR = r"C:\Engineering Program Files\spice_kernels" # This is where the kernels are located.
+LSK  = fr"{KERNEL_DIR}\lsk\naif0012.tls"
+SPK1 = fr"{KERNEL_DIR}\spk\de441_part-1.bsp"
+SPK2 = fr"{KERNEL_DIR}\spk\de441_part-2.bsp"
+def load_kernels():
+    # clear any existing kernels (optional)
+    try:
+        spice.kclear()
+    except Exception:
+        pass
+
+    # Furnsh (load) kernels
+    for k in (LSK, SPK1, SPK2):
+        if not os.path.exists(k):
+            raise FileNotFoundError(f"Kernel not found: {k}")
+        spice.furnsh(k)
+
+
 # Standard Unit of Distance is Kilometers.
+# Starting time reference point is (2000-01-01 12:00:00 UTC).
 class OrbitPropagator:
     # Integrater Function
     # Using DOP853 method.
     # Source - http://www.youtube.com/@alfonsogonzalez-astrodynam2207
-    def __init__(self,r0,v0,tspan,dt,cb,ob,maneuver_start_time=0,maneuver_end_time=0,thrust=0,thrust_direction=0,perturbations=null_perturbations()):
+    def __init__(self,r0,v0,tspan,dt,cb,ob,perturbations=null_perturbations()):
+        load_kernels()
         self.r0 = r0
         self.v0 = v0
         self.tspan = tspan
         self.dt = dt
         self.cb = cb
         self.ob = ob
-        self.maneuver_start_time = maneuver_start_time
-        self.maneuver_end_time = maneuver_end_time
-        self.thrust = thrust
-        self.thrust_direction = thrust_direction
 
         # Total number of steps
         self.n_steps=int(np.ceil(self.tspan/self.dt))
@@ -59,8 +80,7 @@ class OrbitPropagator:
             self.ts[self.step] = self.solver.t
             self.ys[self.step] = self.solver.y
             self.step += 1
-            print(self.solver.y[:3], self.step) # Use only for debugging
-
+            print(self.solver.y[:3], self.solver.t) # Use only for debugging
         self.rs = self.ys[:,:3]
         self.vs = self.ys[:,3:]
 
@@ -76,7 +96,6 @@ class OrbitPropagator:
         self.rx, self.ry, self.rz, self.vx, self.vy, self.vz = y
         self.r = np.array([self.rx, self.ry, self.rz])
         self.v = np.array([self.vx, self.vy, self.vz])
-        self.thrust_direction = np.array([self.vx, self.vy, self.vz]) / np.linalg.norm(self.v)
 
         # Norm of the position vector
         self.norm_r = np.linalg.norm(self.r)
@@ -112,10 +131,21 @@ class OrbitPropagator:
             else:
                 self.a = self.a
 
-        # Maneuver
-        if self.perturbations['Maneuver']:
-            self.a_maneuver = (self.thrust / self.ob['mass']) * self.thrust_direction
-            self.a += self.a_maneuver
+        # Solar Radiation Pressure
+        if self.perturbations['SRP']:
+            self.sun_pos, self.sun_vel = OrbitPropagator.sun_position_icrf(self.solver.t)
+            self.right_ascension_sun = np.atan2(self.sun_pos[1], self.sun_pos[0])
+            if self.right_ascension_sun < 0:
+                self.right_ascension_sun += 2*np.pi
+            self.a_srp_x = ((-4.5e-5) * ( (self.ob['SRP_Area']*1e+10)/(self.ob['mass']*1000) )) * np.cos(self.right_ascension_sun)
+            self.a_srp_y = ((-4.5e-5) * ( (self.ob['SRP_Area']*1e+10)/(self.ob['mass']*1000) )) * np.sin(self.right_ascension_sun) * np.cos(np.radians(23.4349))
+            self.a_srp_z = ((-4.5e-5) * ( (self.ob['SRP_Area']*1e+10)/(self.ob['mass']*1000) )) * np.sin(self.right_ascension_sun) * np.sin(np.radians(23.4349))
+            self.a_srp = np.array([self.a_srp_x, self.a_srp_y, self.a_srp_z]) / 100000
+            self.a += self.a_srp
+
+        # This is the custom code block for the external thrust
+        if self.perturbations['External Thrust']:
+            self.a = self.a
 
         return [self.vx, self.vy, self.vz, self.a[0], self.a[1], self.a[2]]
     
@@ -280,6 +310,7 @@ class OrbitPropagator:
         ax.set_title(title)
         plt.legend()
         plt.show()
+        pass
 
 
     # Keplerian-Orbital elements Plotter
@@ -336,3 +367,16 @@ class OrbitPropagator:
 
         fig.tight_layout(rect=[0, 0, 1, 1])
         plt.show()
+        pass
+
+   
+    # Sun Position Calculator
+    # Refrence fram is ICRF.
+    # Note - The starting reference point is (2000-01-01 12:00:00 UTC)
+    # Source - https://naif.jpl.nasa.gov/naif/data.html
+    def sun_position_icrf(et):
+        state, _ = spice.spkez(10, (et-64.18392728473108), "J2000", "NONE", 399) 
+        # Note - 64ish seconds have been subtracted so that the initial time point is at (2000-01-01 12:00:00 UTC).
+        pos = np.array(state[:3])   # km
+        vel = np.array(state[3:6])  # km/s
+        return pos, vel
