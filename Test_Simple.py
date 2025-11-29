@@ -9,20 +9,20 @@ if __name__ == '__main__':
     print("Orbit propagator is running", flush=True)
 
     # Initial conditions of satellite
-    r0_S, v0_S = OrbitPropagator.Kep2State(6880, 0, 51.6, 0, 0, 0, cb=ct.Earth)
+    r0_S, v0_S = OrbitPropagator.Kep2State(9000, 0.2, 51.6, 0, 0, 0, cb=ct.Earth)
 
     # Initial conditions of debri
     r0_D, v0_D = OrbitPropagator.Kep2State(6880, 0, 97.8, 350, 187, 180.00415, cb=ct.Earth)
 
     # Time span and time step
-    tspan = (1) * (60*60) # hours
+    tspan = (24) * (60*60) # hours
     dt = 10 # seconds
 
     # Propagate orbit
     perturbations = null_perturbations()
     perturbations['J2'] = True
-    perturbations['J3'] = False
-    perturbations['Drag'] = False
+    perturbations['J3'] = True
+    perturbations['Drag'] = True
     perturbations['SRP'] = True
     perturbations['External Thrust'] = False
     
@@ -33,5 +33,5 @@ if __name__ == '__main__':
 
     # OrbitPropagator.PlotOrbits([ob_S.rs], labels=['Satellite'], cb=ct.Earth, title='Test')
     # OrbitPropagator.PlotOrbits([ob_S.rs, ob_D.rs], labels=['Satellite', 'Debri'], cb=ct.Earth, title='Synthetic Collision Situation')
-    # OrbitPropagator.PlotKepOrbits(ob_S.rs,ob_S.vs,ob_S.ts,cb=ct.Earth,title="Evolution of Satellite's Keplerian Elements")
+    OrbitPropagator.PlotKepOrbits(ob_S.rs,ob_S.vs,ob_S.ts,cb=ct.Earth,title="Evolution of Satellite's Keplerian Elements")
     

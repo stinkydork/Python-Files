@@ -52,6 +52,9 @@ class OrbitPropagator:
         self.dt = dt
         self.cb = cb
         self.ob = ob
+        self.altitude = np.linspace(0,1000000,1001)
+        self.rho_ds = ussa1976.compute(z=self.altitude, variables=["rho"])
+        self.rho_table = self.rho_ds["rho"].values.squeeze()
 
         # Total number of steps
         self.n_steps=int(np.ceil(self.tspan/self.dt))
@@ -123,8 +126,7 @@ class OrbitPropagator:
         if self.perturbations['Drag']:
             self.z = (self.norm_r - self.cb['radius']) * 1000.0
             if self.z < 1000000:
-                self.ds = ussa1976.compute(z=np.array([self.z]), variables=["rho"])
-                self.rho = self.ds["rho"].values[0]*1e9
+                self.rho = self.rho_table[round(self.z/1000)]
                 self.vrel = self.v - np.cross(self.cb['at_rot_vec'], self.r)
                 self.a_drag = -((0.5 * self.rho * self.ob['Cd'] * self.ob['Drag_Area']) / self.ob['mass']) * np.linalg.norm(self.vrel) * self.vrel
                 self.a += self.a_drag
