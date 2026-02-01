@@ -52,7 +52,7 @@ class OrbitPropagator:
         self.dt = dt
         self.cb = cb
         self.ob = ob
-        self.altitude = np.linspace(0,1000000,1001)
+        self.altitude = np.linspace(0,1000000,1000001)
         self.rho_ds = ussa1976.compute(z=self.altitude, variables=["rho"])
         self.rho_table = self.rho_ds["rho"].values.squeeze()
 
@@ -126,7 +126,7 @@ class OrbitPropagator:
         if self.perturbations['Drag']:
             self.z = (self.norm_r - self.cb['radius']) * 1000.0
             if self.z < 1000000:
-                self.rho = self.rho_table[round(self.z/1000)]
+                self.rho = self.rho_table[round(self.z)]*(1e9)
                 self.vrel = self.v - np.cross(self.cb['at_rot_vec'], self.r)
                 self.a_drag = -((0.5 * self.rho * self.ob['Cd'] * self.ob['Drag_Area']) / self.ob['mass']) * np.linalg.norm(self.vrel) * self.vrel
                 self.a += self.a_drag
@@ -243,6 +243,10 @@ class OrbitPropagator:
 
             # For each iteration
             kep_array[k] = [a, e_mag, np.degrees(i), np.degrees(RAAN), np.degrees(omega), np.degrees(nu)]
+            
+            # Invalid Cases
+            if a*(1-e_mag) <= cb['radius']: # If perigee is smaller than central body's radius
+                kep_array = float('nan')
 
         return kep_array
 
@@ -289,7 +293,7 @@ class OrbitPropagator:
         n = 0
         for r in rs:
             ax.plot(r[:,0], r[:,1], r[:,2], label=labels[n])
-            ax.scatter(r[0,0], r[0,1], r[0,2], s=20, marker='o',label='Initial Position of '+labels[n])
+            # ax.scatter(r[0,0], r[0,1], r[0,2], s=20, marker='o',label='Initial Position of '+labels[n])
             n += 1
 
         # Plot earth
@@ -310,6 +314,7 @@ class OrbitPropagator:
         ax.set_zlabel('Z (km)')
         ax.set_aspect('equal')
         ax.set_title(title)
+        ax.grid(False)
         plt.legend()
         plt.show()
         pass
@@ -382,3 +387,29 @@ class OrbitPropagator:
         pos = np.array(state[:3])   # km
         vel = np.array(state[3:6])  # km/s
         return pos, vel
+    
+
+    # Energy vs. Time Plotter
+    def PlotEnergy(rs,vs,ts,cb,title):
+        # Defining a plot
+        fig, ax = plt.subplots(figsize=(16, 8))
+        fig.suptitle(title,fontsize=25)
+        xlabel = 'Time Elapsed (hours)'
+
+        # Calculating Energy
+        kinetic = 0.5 * np.linalg.norm(vs, axis=1)**2
+        potential = -cb['mu'] / np.linalg.norm(rs, axis=1)
+        totel = (kinetic + potential) * 1000
+
+        # Making time array
+        ts = ts / 3600
+
+        # Plotting Semi-major axis
+        ax.plot(ts,totel)
+        ax.grid(False)
+        ax.set_ylabel('Specific Energy (kJ/kg)')
+        ax.set_xlabel(xlabel)
+
+        fig.tight_layout(rect=[0, 0, 1, 1])
+        plt.show()
+        pass

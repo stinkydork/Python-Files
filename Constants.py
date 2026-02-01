@@ -13,16 +13,15 @@ Earth = {
     'at_rot_vec' : np.array([0,0,7.29211e-5]) # rad / s
 }
 
-# Made-up CubeSat
-CubeSat = {
-    'name' : 'CubeSat',
-    'mass' : 1.5, # kg
+# TERP Raptor
+CubeSat_TerpRaptor = {
+    'name' : 'CubeSat_TerpRaptor',
+    'mass' : 30.4, # kg
     'Cd' : 2.2, # (Not Sure)
-    'Drag_Area' : 9e-8, # km^2
-    'SRP_Area' : 9e-8, # km^2
+    'Drag_Area' : 1.2e-7, # km^2
+    'SRP_Area' : 1.2e-7, # km^2
     'HBR_Radius' : 0.0003, # km
     'Covarience_Matrix' : np.diag([0.1, 0.1, 0.1]), # km^2
-    # Source - https://www.space-propulsion.com/spacecraft-propulsion/hydrazine-thrusters/20n-hydrazine-thruster.html
     'Impluse' : 230, # seconds
     'Thrust' : 0.02 # kN
 }
@@ -62,5 +61,5 @@ Debri = {
     'Cd' : 2.2,
     'Drag_Area' : 1e-7, # km^2
     'HBR_Radius' : 0.1, # km
-    'Covarience_Matrix' : np.diag([3, 3, 3]) # km^2
+    'Covarience_Matrix' : np.diag([0.3, 0.3, 0.3]) # km^2
 }
