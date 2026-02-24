@@ -17,7 +17,8 @@ Earth = {
 CubeSat_TerpRaptor = {
     'name' : 'CubeSat_TerpRaptor',
     'mass' : 30.4, # kg
-    'Cd' : 2.2, # (Not Sure)
+    'Cd' : 2.2, # 
+    'Max_Slew_Rate' : (3 * (np.pi/180)), # rad/s
     'Drag_Area' : 1.2e-7, # km^2
     'SRP_Area' : 1.2e-7, # km^2
     'HBR_Radius' : 0.0003, # km

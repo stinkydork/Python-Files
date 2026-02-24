@@ -44,10 +44,11 @@ class OrbitPropagator:
     # Integrater Function
     # Using DOP853 method.
     # Source - http://www.youtube.com/@alfonsogonzalez-astrodynam2207
-    def __init__(self,r0,v0,tspan,dt,cb,ob,perturbations=null_perturbations()):
+    def __init__(self,r0,v0,Orien0,tspan,dt,cb,ob,perturbations=null_perturbations()):
         load_kernels()
         self.r0 = r0
         self.v0 = v0
+        self.Orien0 = Orien0
         self.tspan = tspan
         self.dt = dt
         self.cb = cb
@@ -62,11 +63,13 @@ class OrbitPropagator:
         # Initializing arrays for state vector and time
         self.ys=np.zeros((self.n_steps,6))
         self.ts=np.zeros((self.n_steps,1))
+        self.os=np.zeros((self.n_steps,9))
 
         # Initial conditions
         self.y0 = np.hstack((self.r0, self.v0))
         self.ts[0] = 0
         self.ys[0] = np.array(self.y0)
+        self.os[0] = np.array(self.Orien0)
         self.step=1
 
         # Initiate solver
@@ -151,6 +154,46 @@ class OrbitPropagator:
 
         return [self.vx, self.vy, self.vz, self.a[0], self.a[1], self.a[2]]
     
+    # Source - https://academicflight.com/articles/kinematics/rotation-formalisms/principal-rotation-vector/
+    def GetOrien(self, Orien_i, Orien_des):
+        self.Orien_i = Orien_i
+        self.Orien_des = Orien_des
+        # Compute rotation error
+        self.R_err = self.Orien_i.T @ self.Orien_des
+        # Principal rotation angle
+        self.rot_theta = np.arccos( max(-1.0, min(1.0, (0.5 * (np.trace(self.R_err)-1)) )))
+        # If angle is very small, it will return the initial orientation.
+        # This is because small angle will blow up my computer.
+        if np.abs(self.rot_theta) < 1e-12:
+            return self.Orien_des.copy()
+        # Principal rotation axis
+        self.rot_axis = np.array([ self.R_err[1,2] - self.R_err[2,1],
+                       self.R_err[2,0] - self.R_err[0,2],
+                       self.R_err[0,1] - self.R_err[1,0]]) / (2*np.sin(self.rot_theta))
+        
+        # Calculating the rotation rate about the principal rotation axis
+        self.rot_theta_dot = self.rot_theta/self.dt
+        # Calculating the angular rate component-wise
+        self.bodyrate = self.rot_theta_dot * self.rot_axis
+
+        # If Maneuver is possible.
+        if np.all(np.abs(self.bodyrate) <= self.ob['Max_Slew_Rate']):
+            return self.Orien_des.copy()
+        
+        # If Maneuver is not possible.
+        else:
+            self.N_matrix = np.array([[0, -self.rot_axis[2], self.rot_axis[1]],
+                                      [self.rot_axis[2], 0, -self.rot_axis[0]],
+                                      [-self.rot_axis[1], self.rot_axis[0], 0]])
+            self.ndiyadn = np.array([[self.rot_axis[0]*self.rot_axis[0], self.rot_axis[0]*self.rot_axis[1], self.rot_axis[0]*self.rot_axis[2]],
+                                     [self.rot_axis[1]*self.rot_axis[0], self.rot_axis[1]*self.rot_axis[1], self.rot_axis[1]*self.rot_axis[2]],
+                                     [self.rot_axis[2]*self.rot_axis[0], self.rot_axis[2]*self.rot_axis[1], self.rot_axis[2]*self.rot_axis[2]]])
+            self.theta_dot_max = np.min(np.abs(self.ob['Max_Slew_Rate'] / self.rot_axis))
+            self.R_max = ( (np.cos(self.theta_dot_max*self.dt)*np.identity(3)) 
+                         + (np.sin(self.theta_dot_max*self.dt)*self.N_matrix)
+                         + ((1-np.cos(self.theta_dot_max*self.dt))*self.ndiyadn) )
+            return self.Orien_i @ self.R_max
+        
 
     # Keplerian-Orbital elements to State Vector Converter
     # Note - This function only take degrees as input.
@@ -246,7 +289,7 @@ class OrbitPropagator:
             
             # Invalid Cases
             if a*(1-e_mag) <= cb['radius']: # If perigee is smaller than central body's radius
-                kep_array = float('nan')
+                kep_array[k, :] = np.nan
 
         return kep_array
 
