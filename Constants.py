@@ -13,18 +13,42 @@ Earth = {
     'at_rot_vec' : np.array([0,0,7.29211e-5]) # rad / s
 }
 
+# 1U CubeSat (Made-up)
+CubeSat_1U = {
+    'name' : 'CubeSat_1U',
+    'mass' : 1.2, # kg
+    'shape' : 'cube', 
+    'sigma_N' : 1,
+    'sigma_T' : 1,
+    'T_wall' : 300, # k
+    'max_slew_rate' : (3 * (np.pi/180)), # rad/s
+    'lx' : 0.1, # m
+    'ly' : 0.1, # m
+    'lz' : 0.1, # m
+    'covarience_matrix' : np.diag([0.1, 0.1, 0.1]), # km^2
+}
+# Made-up Data
+Debri = {
+    'name' : 'debri',
+    'mass' : 25, # kg
+    'shape' : 'sphere',
+    'radius' : 1, # m 
+    'covarience_matrix' : np.diag([0.3, 0.3, 0.3]) # km^2
+}
+
 # TERP Raptor
 CubeSat_TerpRaptor = {
     'name' : 'CubeSat_TerpRaptor',
     'mass' : 30.4, # kg
-    'Cd' : 2.2, # 
-    'Max_Slew_Rate' : (3 * (np.pi/180)), # rad/s
-    'Drag_Area' : 1.2e-7, # km^2
-    'SRP_Area' : 1.2e-7, # km^2
-    'HBR_Radius' : 0.0003, # km
-    'Covarience_Matrix' : np.diag([0.1, 0.1, 0.1]), # km^2
-    'Impluse' : 230, # seconds
-    'Thrust' : 0.02 # kN
+    'shape' : 'cube', 
+    'sigma_N' : 1,
+    'sigma_T' : 1,
+    'T_wall' : 300, # k
+    'max_slew_rate' : (3 * (np.pi/180)), # rad/s
+    'drag_ref_area' : 0.12, # m^2
+    'SRP_area' : 0.12, # m^2
+    'HBR_radius' : 0.3, # m
+    'covarience_matrix' : np.diag([0.1, 0.1, 0.1]), # km^2
 }
 
 # Made-up Data (Based on Starlink v2 mini)
@@ -53,14 +77,4 @@ Starlink_v2_mini = {
     'Covarience_Matrix' : np.diag([0.1, 0.1, 0.1]), # km^2
     'Low_Impluse' : 2500, # seconds
     'Low_Thrust' : 0.00017 # kN
-}
-
-# Made-up Data
-Debri = {
-    'name' : 'Satellite',
-    'mass' : 25, # kg
-    'Cd' : 2.2,
-    'Drag_Area' : 1e-7, # km^2
-    'HBR_Radius' : 0.1, # km
-    'Covarience_Matrix' : np.diag([0.3, 0.3, 0.3]) # km^2
 }

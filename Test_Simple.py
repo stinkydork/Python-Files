@@ -1,5 +1,5 @@
 import numpy as np
-from OrbitPropagator import OrbitPropagator, null_perturbations
+from OrbitPropagator import OrbitPropagator, all_perturbations
 import Constants as ct
 import time
 
@@ -9,25 +9,20 @@ if __name__ == '__main__':
     print("Orbit propagator is running", flush=True)
 
     # Initial conditions of satellite
-    r0_S, v0_S = OrbitPropagator.Kep2State(11438, 0.3, 0, 0, 0, 300, cb=ct.Earth)
+    r0_S, v0_S = OrbitPropagator.Kep2State(7000, 0, 0, 0, 0, 0, cb=ct.Earth)
 
     # Initial conditions of debri
     r0_D, v0_D = OrbitPropagator.Kep2State(6880, 0, 97.8, 350, 187, 180.00415, cb=ct.Earth)
 
     # Time span and time step
-    tspan = 1484.06388559# (12) * (60*60) # hours
-    dt = 1 # seconds
+    tspan = (12) * (60*60) # hours
+    dt = 10 # seconds
+    perturbations = all_perturbations()
+    perturbations['SRP'] = False
 
     # Propagate orbit
-    perturbations = null_perturbations()
-    perturbations['J2'] = False
-    perturbations['J3'] = False
-    perturbations['Drag'] = False
-    perturbations['SRP'] = False
-    perturbations['External Thrust'] = False
-    
-    ob_S = OrbitPropagator(r0_S,v0_S,0,tspan,dt,cb=ct.Earth,ob=ct.CubeSat_TerpRaptor,perturbations=perturbations)
-    # ob_D = OrbitPropagator(r0_D,v0_D,tspan,dt,cb=ct.Earth,ob=ct.Debri,perturbations=perturbations)
+    ob_S = OrbitPropagator(r0_S,v0_S,tspan,dt,cenb=ct.Earth,ob=ct.CubeSat_1U,pointing_mode='nadir',perturbations=perturbations)
+    # ob_D = OrbitPropagator(r0_D,v0_D,tspan,dt,cenb=ct.Earth,ob=ct.Debri,perturbations=perturbations)
     end_time = time.time()
     print('Time Taken to execute propagator code: '+ str(end_time-start_time) +' seconds')
 
