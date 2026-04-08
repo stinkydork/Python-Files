@@ -70,7 +70,7 @@ class OrbitPropagator:
 
         # Initial orientation
         if self.pointing_mode=="nadir":
-            self.C0 = self.compute_lvlh_frame(self.r0, self.v0)
+            self.C0 = OrbitPropagator.compute_lvlh_frame(self.r0, self.v0)
 
         # Initial conditions
         self.y0 = np.hstack((self.r0, self.v0))
@@ -110,7 +110,7 @@ class OrbitPropagator:
 
     # Simple Helper function to compute LVLH frame
     # Source - https://ai-solutions.com/_freeflyeruniversityguide/attitude_reference_frames.htm 
-    def compute_lvlh_frame(self,r, v):
+    def compute_lvlh_frame(r, v):
         r_hat = r / np.linalg.norm(r)
         h_hat = np.cross(r, v)/np.linalg.norm(np.cross(r, v))
         z = -r_hat
@@ -122,7 +122,7 @@ class OrbitPropagator:
 
     # Simple Helper function to compute VNB frame
     # Source - https://ai-solutions.com/_freeflyeruniversityguide/attitude_reference_frames.htm 
-    def compute_vnb_frame(self, r, v):
+    def compute_vnb_frame(r, v):
         v_hat = v / np.linalg.norm(v)
         n_hat = np.cross(r, v) / np.linalg.norm(np.cross(r, v))
         b_hat = np.cross(v_hat, n_hat)
@@ -166,6 +166,7 @@ class OrbitPropagator:
             self.a += self.a_j3
 
         # Drag perturbation
+        # Source - https://arc.aiaa.org/doi/suppl/10.2514/1.A33606
         if self.perturbations['Drag']:
             self.z = (self.norm_r - self.cenb['radius']) * 1000.0
             if self.z < 1000000:
@@ -186,7 +187,7 @@ class OrbitPropagator:
                     self.term3 = (2 - self.ob['sigma_N'])/(2*self.s**2) 
                     self.term4 = (self.ob['sigma_N']/(6*self.s**4)) * (1 + (2*self.s**2 - 1)*np.exp(-self.s**2)) * np.sqrt(self.ob['T_wall']/self.T_inf)
                     self.C_d = self.term1 + self.term2 + self.term3 + self.term4
-                    self.a_drag = (-((0.5 * self.rho_inf * self.C_d * (4*np.pi*self.ob['radius']**2)) / self.ob['mass']) * np.linalg.norm(self.vrel) * (self.vrel))/1000
+                    self.a_drag = (-((0.5 * self.rho_inf * self.C_d * (np.pi*self.ob['radius']**2)) / self.ob['mass']) * np.linalg.norm(self.vrel) * (self.vrel))/1000
                 
                 # Cube
                 if self.ob['shape'] == 'cube':
@@ -201,21 +202,14 @@ class OrbitPropagator:
                             self.A_ref_drag   = self.ly * self.lz # m²
 
                             # Getting desired Nadir (LVLH) orientation
-                            self.C_des = self.compute_lvlh_frame(self.r, self.v)
+                            self.C_des = OrbitPropagator.compute_lvlh_frame(self.r, self.v)
                             # Getting current achievable orientation via GetOrien function
-                            self.C_cur = self.GetOrien(self.C_cur, self.C_des)   # C is current orientation from state vector
-                            # Getting VNB frame
-                            self.R_vnb = self.compute_vnb_frame(self.r, self.v)   # columns: v_hat, n_hat, b_hat
-
-                            # Expressing body axes in VNB frame
-                            # C_cur columns are body axes in inertial
-                            # R_vnb.T rotates inertial → VNB
-                            self.C_body_in_vnb = self.R_vnb.T @ self.C_cur   # body orientation expressed in VNB
+                            self.C_cur = self.GetOrien(self.C_cur, self.C_des)   # C_cur is current orientation.
 
                             # Relative Velocity in body frame
                             self.v_body = self.C_cur.T @ self.vrel # inertial → body (m/s)
 
-                            # Getting alpha and beta from velocity in VNB frame
+                            # Getting angle-of-attack and side-slip angles (VNB frame)
                             # Source - https://www.youtube.com/watch?v=4kaK569ug9Q
                             self.alpha = np.arctan2(self.v_body[2], self.v_body[0])
                             self.beta  = np.arcsin(self.v_body[1] / np.linalg.norm(self.v_body))
@@ -288,7 +282,6 @@ class OrbitPropagator:
         self.dydt[3:6] = self.a
         return self.dydt
  
-    
 
     # Source - https://academicflight.com/articles/kinematics/rotation-formalisms/principal-rotation-vector/
     def GetOrien(self, Orien_i, Orien_des):
@@ -438,6 +431,9 @@ class OrbitPropagator:
         r_hat = r_rel / np.linalg.norm(r_rel)
         v_hat = v_rel / np.linalg.norm(v_rel)
         z_hat = np.cross(r_hat, v_hat)
+        if np.linalg.norm(z_hat) < 1e-10:
+            raise ValueError("Degenerate conjunction geometry: r_rel and v_rel are nearly parallel")
+        z_hat = z_hat / np.linalg.norm(z_hat)
 
         # Transformation Matrix
         M = np.vstack([r_hat, v_hat, z_hat])
@@ -456,7 +452,7 @@ class OrbitPropagator:
         Pc_scaler = 1 / (2 * np.pi * np.sqrt(np.linalg.det(C_comb)))
         Pc_e_scaler = -0.5 * (p_conj @ np.linalg.inv(C_comb) @ p_conj)
         # After solving integral on paper
-        Pc = Pc_scaler * np.pi * (HBR**2) * (np.e ** Pc_e_scaler)
+        Pc = Pc_scaler * np.pi * (HBR**2) * np.exp(Pc_e_scaler)
 
         return Pc
 

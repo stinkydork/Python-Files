@@ -15,9 +15,12 @@ if __name__ == '__main__':
     r0_D, v0_D = OrbitPropagator.Kep2State(6880, 0, 97.8, 350, 187, 180.00415, cb=ct.Earth)
 
     # Time span and time step
-    tspan = (12) * (60*60) # hours
+    tspan = (1) * (60*60) # hours
     dt = 10 # seconds
     perturbations = all_perturbations()
+    perturbations['Drag'] = False
+    perturbations['J2'] = False
+    perturbations['J3'] = False
     perturbations['SRP'] = False
 
     # Propagate orbit
@@ -26,7 +29,7 @@ if __name__ == '__main__':
     end_time = time.time()
     print('Time Taken to execute propagator code: '+ str(end_time-start_time) +' seconds')
 
-    # OrbitPropagator.PlotOrbits([ob_S.rs], labels=['Satellite'], cb=ct.Earth, title='3D plot of a propagated LEO trajectory around Earth')
+    OrbitPropagator.PlotOrbits([ob_S.rs], labels=['Satellite'], cb=ct.Earth, title='3D plot of a propagated LEO trajectory around Earth')
     # OrbitPropagator.PlotOrbits([ob_S.rs, ob_D.rs], labels=['Satellite', 'Debri'], cb=ct.Earth, title='Synthetic Collision Situation')
     OrbitPropagator.PlotKepOrbits(ob_S.rs,ob_S.vs,ob_S.ts,cb=ct.Earth,title="Evolution of Orbiting Body's Keplerian Elements")
     # OrbitPropagator.PlotEnergy(ob_S.rs,ob_S.vs,ob_S.ts,cb=ct.Earth,title="Specific Energy vs. Time")

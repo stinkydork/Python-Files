@@ -18,7 +18,7 @@ A_ref = ly * lz   # m^2
 
 # Orientation angles
 alpha = 0 * (np.pi/180) # radians
-beta  = 0 * (np.pi/180) # radians
+beta  = 15 * (np.pi/180) # radians
 
 # Atmosphere at given altitude
 ds = ussa1976.compute(z=np.array([h*1000]), variables=["p", "rho", "t"])
@@ -29,7 +29,7 @@ p = ds["p"].values # N/m^2
 # Molecular Speed Ratio
 s = (v_cir*1000) / np.sqrt(2 * (p/rho))
 
-# Trig shortcuts
+# Shortcuts
 ca, sa = np.cos(alpha), np.sin(alpha)
 cb, sb = np.cos(beta),  np.sin(beta)
 Tr = T_wall / T_inf # Temperature ratio
@@ -62,31 +62,21 @@ term14 = (sigma_T*y) * ( (1/(s*np.sqrt(np.pi)) * np.exp(-s**2 * u**2)) + (u*(erf
 term15 = (sigma_T*y*(lx/ly)) * ( (1/(s*np.sqrt(np.pi)) * np.exp(-s**2 * sb**2)) + (sb*(erf(s*sb)+np.sign(sb))) )
 C_N = term11 + term12 + term13 + term14 + term15
 
-# Inertial frame
-r = np.array([h*1000,0,0]) # m
-v = np.array([0,v_cir*1000,0]) # m/s
-# VNB frame
-v_hat = v/np.linalg.norm(v)
-n_hat = np.cross(r,v)/np.linalg.norm(np.cross(r,v))
-b_hat = np.cross(v_hat,n_hat)
-
 # Force vector in body frame
 q = 0.5 * rho * (v_cir*1000)**2   # dynamic pressure (N/m²)
 F_body_axial = -q * A_ref * C_A
 F_body_side = -q * A_ref * C_S
 F_body_normal = -q * A_ref * C_N
-F_body = np.array([F_body_axial, F_body_normal, F_body_side]).flatten()
+F_body = np.array([F_body_axial, F_body_side, F_body_normal]).flatten()
 
-# Rotation matrix (VNB → Body)
-r_vnb2body = R.from_euler('zy', [alpha, beta])
-R_vnb2body = r_vnb2body.as_matrix()
 # Rotation matrix (Body → VNB)
-R_body2vnb = R_vnb2body.T
+R_body2vnb = np.array([[ca*cb, -sb, cb*sa],
+                       [ca*sb,  cb, sa*sb],
+                       [-sa,    0,  ca   ]])
 
 # Force vector in VNB frame
 F_vnb = R_body2vnb @ F_body
+
 print(F_vnb)
 print(F_body)
 print(C_A, C_N, C_S)
-print(np.linalg.norm(F_body))
-print(np.linalg.norm(F_vnb))
