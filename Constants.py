@@ -39,42 +39,14 @@ Debri = {
 # TERP Raptor
 CubeSat_TerpRaptor = {
     'name' : 'CubeSat_TerpRaptor',
-    'mass' : 30, # kg
+    'mass' : 29.6, # kg
     'shape' : 'cube', 
     'sigma_N' : 1,
     'sigma_T' : 1,
     'T_wall' : 300, # k
     'max_slew_rate' : (3 * (np.pi/180)), # rad/s
-    'lx' : 0.2, # m
+    'lx' : 0.4, # m
     'ly' : 0.2, # m
-    'lz' : 0.4, # m
+    'lz' : 0.2, # m
     'covarience_matrix' : np.diag([0.1, 0.1, 0.1]), # km^2
-}
-
-# Made-up Data (Based on Starlink v2 mini)
-Satellite = {
-    'name' : 'Satellite',
-    'mass' : 800, # kg
-    'Cd' : 2.2, # (Not Sure)
-    'Drag_Area' : 1.08e-5, # km^2
-    'SRP_Area' : 1.08e-5, # km^2
-    'HBR_Radius' : 0.004, # km
-    'Covarience_Matrix' : np.diag([0.1, 0.1, 0.1]), # km^2
-    # Source - https://www.space-propulsion.com/spacecraft-propulsion/hydrazine-thrusters/20n-hydrazine-thruster.html
-    'Impluse' : 230, # seconds
-    'Thrust' : 0.02 # kN
-}
-
-# Starlink v2 mini (Guesstimated)
-# Source 1 - https://dishycentral.com/how-big-are-starlink-satellites
-# Source 2 - https://www.aviationtoday.com/2023/02/28/spacex-shares-details-higher-bandwidth-v2-mini-starlink-satellites/
-Starlink_v2_mini = {
-    'name' : 'Starlink_v2_mini',
-    'mass' : 800, # kg
-    'Cd' : 2.2, # (Not Sure)
-    'Drag_Area' : 1.08e-5, # km^2 
-    'HBR_Radius' : 0.004, # km
-    'Covarience_Matrix' : np.diag([0.1, 0.1, 0.1]), # km^2
-    'Low_Impluse' : 2500, # seconds
-    'Low_Thrust' : 0.00017 # kN
 }

@@ -7,18 +7,19 @@ from scipy.spatial.transform import Rotation as R
 
 # Source - https://arc.aiaa.org/doi/suppl/10.2514/1.A33606
 # Sample Inputs
-h = 500   # altitude in km
-v_cir = np.sqrt(ct.Earth["mu"]/(h+ct.Earth["radius"]))    # orbital velocity in km/s
+r_cir = 7000 # km
+v_cir = np.sqrt(ct.Earth["mu"]/(7000))    # orbital velocity in km/s
+h = r_cir - ct.Earth["radius"]  # altitude in km
 T_wall = 300.0
 sigma_N = 1.0 # Good asumption
 sigma_T = 1.0 # Good asumption
-L = 1 # Cube Side Length in m
+L = 0.1 # Cube Side Length in m
 lx, ly, lz = L, L, L
 A_ref = ly * lz   # m^2
 
 # Orientation angles
 alpha = 0 * (np.pi/180) # radians
-beta  = 15 * (np.pi/180) # radians
+beta  = 0 * (np.pi/180) # radians
 
 # Atmosphere at given altitude
 ds = ussa1976.compute(z=np.array([h*1000]), variables=["p", "rho", "t"])

@@ -131,8 +131,23 @@ n = np.sqrt(ct.Earth["mu"] / (np.linalg.norm(r0))**3) # Mean motion
 # (alpha_deg, beta_deg)
 cases = [
     (0, 0), # Default case
-    (45, 45),
-    (45, 6),
+    (0, 5),
+    (0, 10),
+    (0, 15),
+    (0, 20),
+    (0, 25),
+    (0, 30),
+    (0, 35),
+    (0, 40),
+    (0, 45),
+    (0, 50),
+    (0, 55),
+    (0, 60),
+    (0, 65),
+    (0, 70),
+    (0, 75),
+    (0, 80),
+    (0, 85),
 ]
 
 all_states = {}
@@ -141,7 +156,7 @@ for alpha_deg, beta_deg in cases:
     beta  = np.deg2rad(beta_deg)
     states = []
     for t in t_array:
-        a_drag = drag_acceleration_vnb(r0, v0, alpha, beta, ct.CubeSat_1U, ct.Earth)
+        a_drag = drag_acceleration_vnb(r0, v0, alpha, beta, ct.CubeSat_TerpRaptor, ct.Earth)
         rel_state = hills_drag_rel_state(t, n, a_drag[2]*1000, a_drag[0]*1000, a_drag[1]*1000)
         x_rel, y_rel, z_rel = rel_state[:3]/1000
 
@@ -153,27 +168,21 @@ for alpha_deg, beta_deg in cases:
     all_states[(alpha_deg, beta_deg)] = np.array(states)
 
 # Plot
-fig, axes = plt.subplots(2, 2, figsize=(12, 8))
-axes = axes.flatten()
+plt.figure(figsize=(8, 5))
 
-labels = ['Δx (m)', 'Δy (m)', 'Δz (m)', '|Δr| (m)']
 time_hr = t_array / 3600
-
 ref_key = list(all_states.keys())[0]
+
 for (alpha_deg, beta_deg), states in all_states.items():
     diff = states - all_states[ref_key]
-    mag = np.linalg.norm(diff, axis=1)
-    data = [diff[:, 0], diff[:, 1], diff[:, 2], mag]
+    delta_y = diff[:, 1] * 1000  # convert km → m
 
-    for ax, d, label in zip(axes, data, labels):
-        ax.plot(time_hr, d*1000, label=f'a = {alpha_deg}°, b = {beta_deg}°')
-        ax.set_ylabel(label)
-        ax.grid(True)
+    plt.plot(time_hr, delta_y, label=f'α={alpha_deg}°, β={beta_deg}°')
 
-for ax in axes:
-    ax.set_xlabel('Time (hours)')
-    ax.legend()
-
-fig.suptitle('Relative Position Differences for different orientation | Terp Raptor', fontsize=14)
+plt.xlabel('Time (hours)')
+plt.ylabel('Δy (m)')
+plt.title('Relative Position Differences for varying β (α = 0; Nadir Pointing) | Terp Raptor')
+plt.grid(True)
+plt.legend()
 plt.tight_layout()
 plt.show()

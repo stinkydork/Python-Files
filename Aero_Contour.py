@@ -5,14 +5,15 @@ import Constants as ct
 import matplotlib.pyplot as plt
 
 # Sample Inputs
-h = 500   # altitude in km
-v_cir = np.sqrt(ct.Earth["mu"]/(h+ct.Earth["radius"]))    # orbital velocity in km/s
-T_wall = 300.0
-sigma_N = 1.0
-sigma_T = 1.0
-L = 1
-lx, ly, lz = L, L, L
-A_ref = ly * lz
+ob = ct.CubeSat_TerpRaptor
+r_cir = 7000  # km
+v_cir = np.sqrt(ct.Earth["mu"]/r_cir)    # orbital velocity in km/s
+h = r_cir - ct.Earth["radius"] # Altitude in km
+T_wall = ob["T_wall"]
+sigma_N = ob["sigma_N"]
+sigma_T = ob["sigma_T"]
+lx, ly, lz = ob["lx"], ob["ly"], ob["lz"]
+A_ref = ly * lz   # m^2
 
 # Atmosphere
 ds = ussa1976.compute(z=np.array([h*1000]), variables=["p", "rho", "t"])
@@ -23,8 +24,8 @@ s     = (v_cir*1000) / np.sqrt(2 * (p/rho))
 Tr    = T_wall / T_inf
 
 # Meshgrid for orientation angles
-alpha_vals = np.linspace( (-40)*(np.pi/180) , (40)*(np.pi/180), 1000)
-beta_vals  = np.linspace( (-40)*(np.pi/180) , (40)*(np.pi/180), 1000)
+alpha_vals = np.linspace( (-90)*(np.pi/180) , (90)*(np.pi/180), 1000)
+beta_vals  = np.linspace( (-90)*(np.pi/180) , (90)*(np.pi/180), 1000)
 ALPHA, BETA = np.meshgrid(alpha_vals, beta_vals)
 
 # Aerodynamic Coefficient Formulas
@@ -66,20 +67,21 @@ F_n = (ca*sb)*F_body_axial + (cb)*F_body_side + (sa*sb)*F_body_normal
 F_b = (-sa)*F_body_axial + (0)*F_body_side + (ca)*F_body_normal
 
 # Plotting
-fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+fig, axes = plt.subplots(1, 3, figsize=(18, 6), sharey=True)
 data = [
     (F_v, "Force along orbital velocity", "F$_V$ (N)"),
     (F_n, "Force along orbit normal", "F$_N$ (N)"),
     (F_b, "Force along orbit binormal", "F$_B$ (N)"),
 ]
 
-for ax, (Z, title, label) in zip(axes, data):
-    cp = ax.contourf(np.degrees(ALPHA), np.degrees(BETA), Z, levels=40, cmap="YlOrRd")
+for i, (ax, (Z, title, label)) in enumerate(zip(axes, data)):
+    cp = ax.contourf(np.degrees(ALPHA), np.degrees(BETA), Z, levels=50, cmap="YlOrRd")
     plt.colorbar(cp, ax=ax, label=label)
     ax.set_xlabel("α (deg)")
-    ax.set_ylabel("β (deg)")
+    if i == 0:
+        ax.set_ylabel("β (deg)")
     ax.set_title(title)
-
-plt.suptitle(f"Forces in VNB Frame — h={h} km, L={L} m", fontsize=13)
+ 
+plt.suptitle(f"Drag Force expressed in VNB frame", fontsize=13)
 plt.tight_layout()
 plt.show()
