@@ -6,9 +6,8 @@ import matplotlib.pyplot as plt
 
 # Sample Inputs
 ob = ct.CubeSat_TerpRaptor
-r_cir = 7000  # km
-v_cir = np.sqrt(ct.Earth["mu"]/r_cir)    # orbital velocity in km/s
-h = r_cir - ct.Earth["radius"] # Altitude in km
+h = 500 # Altitude in km
+v_cir = np.sqrt(ct.Earth["mu"]/(ct.Earth["radius"]+h))    # orbital velocity in km/s
 T_wall = ob["T_wall"]
 sigma_N = ob["sigma_N"]
 sigma_T = ob["sigma_T"]
@@ -24,8 +23,8 @@ s     = (v_cir*1000) / np.sqrt(2 * (p/rho))
 Tr    = T_wall / T_inf
 
 # Meshgrid for orientation angles
-alpha_vals = np.linspace( (-90)*(np.pi/180) , (90)*(np.pi/180), 1000)
-beta_vals  = np.linspace( (-90)*(np.pi/180) , (90)*(np.pi/180), 1000)
+alpha_vals = np.linspace( (-0)*(np.pi/180) , (45)*(np.pi/180), 1000)
+beta_vals  = np.linspace( (-0)*(np.pi/180) , (45)*(np.pi/180), 1000)
 ALPHA, BETA = np.meshgrid(alpha_vals, beta_vals)
 
 # Aerodynamic Coefficient Formulas
@@ -69,9 +68,9 @@ F_b = (-sa)*F_body_axial + (0)*F_body_side + (ca)*F_body_normal
 # Plotting
 fig, axes = plt.subplots(1, 3, figsize=(18, 6), sharey=True)
 data = [
-    (F_v, "Force along orbital velocity", "F$_V$ (N)"),
-    (F_n, "Force along orbit normal", "F$_N$ (N)"),
-    (F_b, "Force along orbit binormal", "F$_B$ (N)"),
+    (F_v-F_v[0,0], "Force along orbital velocity", "F$_V$ (N)"),
+    (F_n-F_n[0,0], "Force along orbit normal", "F$_N$ (N)"),
+    (F_b-F_b[0,0], "Force along orbit binormal", "F$_B$ (N)"),
 ]
 
 for i, (ax, (Z, title, label)) in enumerate(zip(axes, data)):

@@ -31,7 +31,10 @@ CubeSat_1U = {
 Debri = {
     'name' : 'debri',
     'mass' : 25, # kg
-    'shape' : 'sphere',
+    'shape' : 'sphere_debri',
+    'sigma_N' : 1,
+    'sigma_T' : 1,
+    'T_wall' : 300, # k
     'radius' : 1, # m 
     'covarience_matrix' : np.diag([0.3, 0.3, 0.3]) # km^2
 }
@@ -39,13 +42,13 @@ Debri = {
 # TERP Raptor
 CubeSat_TerpRaptor = {
     'name' : 'CubeSat_TerpRaptor',
-    'mass' : 29.6, # kg
+    'mass' : 21, # kg
     'shape' : 'cube', 
     'sigma_N' : 1,
     'sigma_T' : 1,
     'T_wall' : 300, # k
     'max_slew_rate' : (3 * (np.pi/180)), # rad/s
-    'lx' : 0.4, # m
+    'lx' : 0.3, # m
     'ly' : 0.2, # m
     'lz' : 0.2, # m
     'covarience_matrix' : np.diag([0.1, 0.1, 0.1]), # km^2

@@ -2,8 +2,6 @@ import numpy as np
 from scipy.special import erf
 import ussa1976
 import Constants as ct
-import matplotlib.pyplot as plt
-from scipy.spatial.transform import Rotation as R
 
 # Source - https://arc.aiaa.org/doi/suppl/10.2514/1.A33606
 # Sample Inputs

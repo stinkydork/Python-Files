@@ -7,7 +7,8 @@ import Constants as ct
 import ussa1976
 import spiceypy as spice
 import os
-plt.style.use('dark_background')
+import sys
+
 
 # For selecting which type of perturbation is needed.
 def all_perturbations():
@@ -15,12 +16,13 @@ def all_perturbations():
         'J2' : True,
         'J3' : True,
         'Drag' : True,
-        'SRP' : True,
-        'External Thrust' : True
+        'SRP' : False,
+        'External Thrust' : False
     }
 
 
 # Kernels for NASA Spice files.
+# Do not touch this portion of code
 KERNEL_DIR = r"C:\Engineering Program Files\spice_kernels" # This is where the kernels are located.
 LSK  = fr"{KERNEL_DIR}\lsk\naif0012.tls"
 SPK1 = fr"{KERNEL_DIR}\spk\de441_part-1.bsp"
@@ -41,36 +43,50 @@ def load_kernels():
 
 # Standard Unit of Distance is Kilometers.
 # Starting time reference point is (2000-01-01 12:00:00 UTC).
+# Reference Frame is ICRF.
 class OrbitPropagator:
     # Integrater Function
     # Using DOP853 method.
     # Source - http://www.youtube.com/@alfonsogonzalez-astrodynam2207
     def __init__(self,r0,v0,tspan,dt,cenb,ob,pointing_mode,perturbations=all_perturbations()):
         load_kernels()
-        self.r0 = r0
-        self.v0 = v0
-        self.tspan = tspan
-        self.dt = dt
-        self.cenb = cenb
-        self.ob = ob
+        self.r0 = r0 # Position Vector [km]
+        self.v0 = v0 # Velocity Vector [km/s]
+        self.tspan = tspan # Total time of propagation [s]
+        self.dt = dt # Time step [s]
+        self.cenb = cenb # Central Body (This extracts data of given object from Constants.py file)
+        self.ob = ob # Orbiting Body (This extracts data of given object from Constants.py file)
+
+        # Pointing Mode
+        # As of now this only supports nadir pointing.
         self.pointing_mode = pointing_mode
+        if self.pointing_mode=="nadir":
+            if self.ob['shape'] == 'sphere_debri':
+                print("Invalid Combination of pointing mode and shape of orbiting body")
+                sys.exit()
+        if self.pointing_mode=="N/A":
+            if self.ob['shape'] == 'cube':
+                print("Invalid Combination of pointing mode and shape of orbiting body")
+                sys.exit()
+
+        # Altitude data
         self.altitude = np.linspace(0,1000000,1000001)
         self.altitude_ds = ussa1976.compute(z=self.altitude, variables=["p", "rho", "t"])
-        self.rho_table = self.altitude_ds["rho"].values.squeeze()
-        self.p_table = self.altitude_ds["p"].values.squeeze()
-        self.t_table = self.altitude_ds["t"].values.squeeze()
+        self.rho_table = self.altitude_ds["rho"].values.squeeze() # Atmospheric Density table [kg/m^3]
 
         # Total number of steps
-        self.n_steps=int(np.ceil(self.tspan/self.dt))
+        self.n_steps=int(np.ceil(self.tspan/self.dt))+1
 
         # Initializing arrays for state vector and time
-        self.ys=np.zeros((self.n_steps,6))
-        self.ts=np.zeros((self.n_steps,1))
-        self.os = np.zeros((self.n_steps, 3, 3))
+        self.ys=np.zeros((self.n_steps,6)) # State Vector
+        self.ts=np.zeros((self.n_steps,1)) # Time Vector
+        self.os = np.zeros((self.n_steps, 3, 3)) # Orientation
 
         # Initial orientation
         if self.pointing_mode=="nadir":
             self.C0 = OrbitPropagator.compute_lvlh_frame(self.r0, self.v0)
+        if self.pointing_mode=="N/A":
+            self.C0 = np.zeros((3, 3))# This is just a placeholder.
 
         # Initial conditions
         self.y0 = np.hstack((self.r0, self.v0))
@@ -132,10 +148,7 @@ class OrbitPropagator:
 
     # Force Model Function
     # Two Body acceleration is always on.
-    # Source 1 - http://www.youtube.com/@alfonsogonzalez-astrodynam2207
-    # Source 2 - Fundamentals of Astrodynamics (Textbook)
-    # Source 3 - https://farside.ph.utexas.edu/teaching/celestial/Celestial/node94.html
-    # Source 4 - https://ussa1976.readthedocs.io/en/latest/index.html
+    # Source - http://www.youtube.com/@alfonsogonzalez-astrodynam2207
     def diffy_q(self,t,y):
         # Making proper arrays
         self.rx, self.ry, self.rz = y[0:3]
@@ -148,6 +161,14 @@ class OrbitPropagator:
 
         # Two-body acceleration
         self.a = -self.r * self.cenb['mu'] / self.norm_r**3
+
+        # Orientation matrix
+        # Nadir pointing - Corresponds to LVLH frmae as, z-vector is pointed towards negative of position vector.
+        if self.pointing_mode == 'nadir':
+            # Getting desired Nadir (LVLH) orientation
+            self.C_des = OrbitPropagator.compute_lvlh_frame(self.r, self.v)
+            # Getting current achievable orientation via GetOrien function
+            self.C_cur = self.GetOrien(self.C_cur, self.C_des, self.ob)   # C_cur is current orientation.
 
         # J2 perturbation
         if self.perturbations['J2']:
@@ -170,82 +191,30 @@ class OrbitPropagator:
         if self.perturbations['Drag']:
             self.z = (self.norm_r - self.cenb['radius']) * 1000.0
             if self.z < 1000000:
+                self.vrel = (self.v - np.cross(self.cenb['at_rot_vec'], self.r))*1000 # m/s
                 self.rho_inf = self.rho_table[round(self.z)]
-                self.p_inf = self.p_table[round(self.z)]
-                self.T_inf = self.t_table[round(self.z)]
-
-                self.vrel = (self.v - np.cross(self.cenb['at_rot_vec'], self.r))*1000 # m
-                self.s = np.linalg.norm(self.vrel) / np.sqrt(2 * (self.p_inf/self.rho_inf)) # Molecular Speed Ratio
 
                 # Sphere
-                if self.ob['shape'] == 'sphere':
-                    # C_D formula
-                    self.term1 = (2 - self.ob['sigma_N'] + self.ob['sigma_T']) * (0.5 +
-                        0.5 * erf(self.s) * (1 + 1/self.s**2 - 1/(4*self.s**4)) +
-                        (1 + 2*self.s**2) * np.exp(-self.s**2) / (4*self.s**3*np.sqrt(np.pi)))
-                    self.term2 = (self.ob['sigma_N'] / (3*self.s)) * np.sqrt(np.pi * (self.ob['T_wall']/self.T_inf)) * (1 + erf(self.s))
-                    self.term3 = (2 - self.ob['sigma_N'])/(2*self.s**2) 
-                    self.term4 = (self.ob['sigma_N']/(6*self.s**4)) * (1 + (2*self.s**2 - 1)*np.exp(-self.s**2)) * np.sqrt(self.ob['T_wall']/self.T_inf)
-                    self.C_d = self.term1 + self.term2 + self.term3 + self.term4
+                if self.ob['shape'] == 'sphere_debri':
+                    self.C_d = OrbitPropagator.get_DragCoefficient_Sphere(self.norm_r, np.linalg.norm(self.vrel), self.ob, self.cenb)
                     self.a_drag = (-((0.5 * self.rho_inf * self.C_d * (np.pi*self.ob['radius']**2)) / self.ob['mass']) * np.linalg.norm(self.vrel) * (self.vrel))/1000
                 
                 # Cube
                 if self.ob['shape'] == 'cube':
                     # Nadir Pointing
                     if self.pointing_mode == 'nadir':
-                            self.sigma_N = self.ob['sigma_N']
-                            self.sigma_T = self.ob['sigma_T']
-                            self.Tr      = self.ob['T_wall'] / self.T_inf
-                            self.lx = self.ob['lx']
-                            self.ly = self.ob['ly']
-                            self.lz = self.ob['lz']
-                            self.A_ref_drag   = self.ly * self.lz # m²
+                            self.A_ref_drag  = self.ob["ly"] * self.ob["lz"]
+                            self.v_body = self.C_cur.T @ self.vrel # inertial to body (m/s)
 
-                            # Getting desired Nadir (LVLH) orientation
-                            self.C_des = OrbitPropagator.compute_lvlh_frame(self.r, self.v)
-                            # Getting current achievable orientation via GetOrien function
-                            self.C_cur = self.GetOrien(self.C_cur, self.C_des)   # C_cur is current orientation.
-
-                            # Relative Velocity in body frame
-                            self.v_body = self.C_cur.T @ self.vrel # inertial → body (m/s)
-
-                            # Getting angle-of-attack and side-slip angles (VNB frame)
+                            # Getting angle-of-attack and side-slip angles
                             # Source - https://www.youtube.com/watch?v=4kaK569ug9Q
                             self.alpha = np.arctan2(self.v_body[2], self.v_body[0])
-                            self.beta  = np.arcsin(self.v_body[1] / np.linalg.norm(self.v_body))
-                            
-                            # Trig shortcuts
-                            self.ca, self.sa = np.cos(self.alpha), np.sin(self.alpha)
-                            self.cb, self.sb = np.cos(self.beta),  np.sin(self.beta)
+                            self.beta = np.arcsin(self.v_body[1] / np.linalg.norm(self.v_body))
 
-                            # Force Coefficients Formulas
-                            # Note - # Signum Function is np.sign function
-                            # C_A
-                            self.u = self.ca * self.cb
-                            self.term1 = ( ((2 - self.sigma_N)/(self.s * np.sqrt(np.pi)) * self.u) + (np.sign(self.u) * (self.sigma_N/(2*self.s**2)) * np.sqrt(self.Tr)) ) * (np.exp(-self.s**2 * self.u**2))
-                            self.term2 = (2 - self.sigma_N) * (self.u**2 + (1/(2*self.s**2))) * (np.sign(self.u) + erf(self.s*self.u))
-                            self.term3 = (self.sigma_N/(2*self.s) * self.u * np.sqrt(np.pi*self.Tr)) * (1 + np.sign(self.u)*erf(self.s*self.u))
-                            self.term4 = (self.sigma_T*self.u*(self.lx/self.ly)) * ( (1/(self.s*np.sqrt(np.pi)) * np.exp(-self.s**2 * self.sb**2)) + (self.sb*(np.sign(self.sb)+erf(self.s*self.sb))) )
-                            self.term5 = (self.sigma_T*self.u*(self.lx/self.lz)) * ( (1/(self.s*np.sqrt(np.pi)) * np.exp(-self.s**2 * self.sa**2 * self.cb**2)) + (self.sa*self.cb*(erf(self.s*self.sa*self.cb)+np.sign(self.sa*self.cb))) )
-                            self.C_A = self.term1 + self.term2 + self.term3 + self.term4 + self.term5
-                            # C_S
-                            self.term6 = (self.lx/self.ly) * ( ((2 - self.sigma_N)/(self.s * np.sqrt(np.pi)) * self.sb) + (np.sign(self.sb) * (self.sigma_N/(2*self.s**2)) * np.sqrt(self.Tr)) ) * (np.exp(-self.s**2 * self.sb**2))
-                            self.term7 = (self.lx/self.ly) * (2 - self.sigma_N) * (self.sb**2 + (1/(2*self.s**2))) * (np.sign(self.sb) + erf(self.s*self.sb))
-                            self.term8 = (self.lx/self.ly) * (self.sigma_N/(2*self.s) * self.sb * np.sqrt(np.pi*self.Tr)) * (1 + np.sign(self.sb)*erf(self.s*self.sb))
-                            self.term9 = (self.sigma_T*self.sb) * ( (1/(self.s*np.sqrt(np.pi)) * np.exp(-self.s**2 * self.u**2)) + (self.u*(erf(self.s*self.u)+np.sign(self.u))) )
-                            self.term10 = (self.sigma_T*self.sb*(self.lx/self.lz)) * ( (1/(self.s*np.sqrt(np.pi)) * np.exp(-self.s**2 * self.sa**2 * self.cb**2)) + (self.sa*self.cb*(erf(self.s*self.sa*self.cb)+np.sign(self.sa*self.cb))) )
-                            self.C_S = self.term6 + self.term7 + self.term8 + self.term9 + self.term10
-                            # C_N
-                            self.g = self.sa * self.cb
-                            self.term11 = (self.lx/self.lz) * ( ((2 - self.sigma_N)/(self.s * np.sqrt(np.pi)) * self.g) + (np.sign(self.g) * (self.sigma_N/(2*self.s**2)) * np.sqrt(self.Tr)) ) * (np.exp(-self.s**2 * self.g**2))
-                            self.term12 = (self.lx/self.lz) * (2 - self.sigma_N) * (self.g**2 + (1/(2*self.s**2))) * (np.sign(self.g) + erf(self.s*self.g))
-                            self.term13 = (self.lx/self.lz) * (self.sigma_N/(2*self.s) * self.g * np.sqrt(np.pi*self.Tr)) * (1 + np.sign(self.g)*erf(self.s*self.g))
-                            self.term14 = (self.sigma_T*self.g) * ( (1/(self.s*np.sqrt(np.pi)) * np.exp(-self.s**2 * self.u**2)) + (self.u*(erf(self.s*self.u)+np.sign(self.u))) )
-                            self.term15 = (self.sigma_T*self.g*(self.lx/self.ly)) * ( (1/(self.s*np.sqrt(np.pi)) * np.exp(-self.s**2 * self.sb**2)) + (self.sb*(erf(self.s*self.sb)+np.sign(self.sb))) )
-                            self.C_N = self.term11 + self.term12 + self.term13 + self.term14 + self.term15
-
+                            # Force Coefficients
+                            self.C_A, self.C_S, self.C_N = OrbitPropagator.get_AeroCoefficient_RectangularPrism(np.rad2deg(self.alpha), np.rad2deg(self.beta), self.norm_r, np.linalg.norm(self.vrel), self.ob, self.cenb)
                             # Force calculation
-                            self.q_inf     = 0.5 * self.rho_inf * np.linalg.norm(self.v_body)**2 # N/m²
+                            self.q_inf = 0.5 * self.rho_inf * np.linalg.norm(self.v_body)**2 # N/m²
                             self.F_body_axial = -self.q_inf * self.A_ref_drag * self.C_A # N
                             self.F_body_side = -self.q_inf * self.A_ref_drag * self.C_S # N
                             self.F_body_normal = -self.q_inf * self.A_ref_drag * self.C_N # N
@@ -262,15 +231,7 @@ class OrbitPropagator:
 
         # Solar Radiation Pressure
         if self.perturbations['SRP']:
-            self.sun_pos, self.sun_vel = OrbitPropagator.sun_position_icrf(self.solver.t)
-            self.right_ascension_sun = np.atan2(self.sun_pos[1], self.sun_pos[0])
-            if self.right_ascension_sun < 0:
-                self.right_ascension_sun += 2*np.pi
-            self.a_srp_x = ((-4.5e-5) * ( (self.ob['SRP_Area']*1e+10)/(self.ob['mass']*1000) )) * np.cos(self.right_ascension_sun)
-            self.a_srp_y = ((-4.5e-5) * ( (self.ob['SRP_Area']*1e+10)/(self.ob['mass']*1000) )) * np.sin(self.right_ascension_sun) * np.cos(np.radians(23.4349))
-            self.a_srp_z = ((-4.5e-5) * ( (self.ob['SRP_Area']*1e+10)/(self.ob['mass']*1000) )) * np.sin(self.right_ascension_sun) * np.sin(np.radians(23.4349))
-            self.a_srp = np.array([self.a_srp_x, self.a_srp_y, self.a_srp_z]) / 100000
-            self.a += self.a_srp
+            self.a = self.a # Work in progress
 
         # This is the custom code block for the external thrust
         if self.perturbations['External Thrust']:
@@ -284,44 +245,49 @@ class OrbitPropagator:
  
 
     # Source - https://academicflight.com/articles/kinematics/rotation-formalisms/principal-rotation-vector/
-    def GetOrien(self, Orien_i, Orien_des):
+    def GetOrien(self, Orien_i, Orien_des, ob):
         self.Orien_i = Orien_i
         self.Orien_des = Orien_des
-        # Compute rotation error
-        self.R_err = self.Orien_i.T @ self.Orien_des
-        # Principal rotation angle
-        self.rot_theta = np.arccos( max(-1.0, min(1.0, (0.5 * (np.trace(self.R_err)-1)) )))
-        # If angle is very small, it will return the initial orientation.
-        # This is because small angle will blow up my computer.
-        if np.abs(self.rot_theta) < 1e-12:
-            return self.Orien_des.copy()
-        # Principal rotation axis
-        self.rot_axis = np.array([ self.R_err[1,2] - self.R_err[2,1],
-                       self.R_err[2,0] - self.R_err[0,2],
-                       self.R_err[0,1] - self.R_err[1,0]]) / (2*np.sin(self.rot_theta))
+        self.ob = ob
         
-        # Calculating the rotation rate about the principal rotation axis
-        self.rot_theta_dot = self.rot_theta/self.dt
-        # Calculating the angular rate component-wise
-        self.bodyrate = self.rot_theta_dot * self.rot_axis
-
-        # If Maneuver is possible.
-        if np.all(np.abs(self.bodyrate) <= self.ob['max_slew_rate']):
+        # Skipping this function for sphere, as it represents debri.
+        if self.ob['shape'] == 'sphere_debri':
             return self.Orien_des.copy()
-        
-        # If Maneuver is not possible.
         else:
-            self.N_matrix = np.array([[0, -self.rot_axis[2], self.rot_axis[1]],
-                                      [self.rot_axis[2], 0, -self.rot_axis[0]],
-                                      [-self.rot_axis[1], self.rot_axis[0], 0]])
-            self.ndiyadn = np.array([[self.rot_axis[0]*self.rot_axis[0], self.rot_axis[0]*self.rot_axis[1], self.rot_axis[0]*self.rot_axis[2]],
-                                     [self.rot_axis[1]*self.rot_axis[0], self.rot_axis[1]*self.rot_axis[1], self.rot_axis[1]*self.rot_axis[2]],
-                                     [self.rot_axis[2]*self.rot_axis[0], self.rot_axis[2]*self.rot_axis[1], self.rot_axis[2]*self.rot_axis[2]]])
-            self.theta_dot_max = np.min(np.abs(self.ob['Max_Slew_Rate'] / self.rot_axis))
-            self.R_max = ( (np.cos(self.theta_dot_max*self.dt)*np.identity(3)) 
-                         + (np.sin(self.theta_dot_max*self.dt)*self.N_matrix)
-                         + ((1-np.cos(self.theta_dot_max*self.dt))*self.ndiyadn) )
-            return self.Orien_i @ self.R_max
+            # Compute rotation error
+            self.R_err = self.Orien_i.T @ self.Orien_des
+            # Principal rotation angle
+            self.rot_theta = np.arccos( max(-1.0, min(1.0, (0.5 * (np.trace(self.R_err)-1)) )))
+            # If angle is very small, it will return the initial orientation.
+            if np.abs(self.rot_theta) < 1e-12:
+                return self.Orien_des.copy()
+            # Principal rotation axis
+            self.rot_axis = np.array([ self.R_err[1,2] - self.R_err[2,1],
+                        self.R_err[2,0] - self.R_err[0,2],
+                        self.R_err[0,1] - self.R_err[1,0]]) / (2*np.sin(self.rot_theta))
+            
+            # Calculating the rotation rate about the principal rotation axis
+            self.rot_theta_dot = self.rot_theta/self.dt
+            # Calculating the angular rate component-wise
+            self.bodyrate = self.rot_theta_dot * self.rot_axis
+
+            # If Maneuver is possible.
+            if np.all(np.abs(self.bodyrate) <= self.ob['max_slew_rate']):
+                return self.Orien_des.copy()
+            
+            # If Maneuver is not possible.
+            else:
+                self.N_matrix = np.array([[0, -self.rot_axis[2], self.rot_axis[1]],
+                                        [self.rot_axis[2], 0, -self.rot_axis[0]],
+                                        [-self.rot_axis[1], self.rot_axis[0], 0]])
+                self.ndiyadn = np.array([[self.rot_axis[0]*self.rot_axis[0], self.rot_axis[0]*self.rot_axis[1], self.rot_axis[0]*self.rot_axis[2]],
+                                        [self.rot_axis[1]*self.rot_axis[0], self.rot_axis[1]*self.rot_axis[1], self.rot_axis[1]*self.rot_axis[2]],
+                                        [self.rot_axis[2]*self.rot_axis[0], self.rot_axis[2]*self.rot_axis[1], self.rot_axis[2]*self.rot_axis[2]]])
+                self.theta_dot_max = np.min(np.abs(self.ob['Max_Slew_Rate'] / self.rot_axis))
+                self.R_max = ( (np.cos(self.theta_dot_max*self.dt)*np.identity(3)) 
+                            + (np.sin(self.theta_dot_max*self.dt)*self.N_matrix)
+                            + ((1-np.cos(self.theta_dot_max*self.dt))*self.ndiyadn) )
+                return self.Orien_i @ self.R_max
         
 
     # Keplerian-Orbital elements to State Vector Converter
@@ -589,3 +555,113 @@ class OrbitPropagator:
         plt.show()
         pass
 
+
+    # This function compute aerodynamic force coefficient in Body frame for a spacecraft at given orientation and at given state.
+    # This function assumme that spacecraft is "Rectangular Prism".
+    def get_AeroCoefficient_RectangularPrism(alpha, beta, r_mag, v_mag, ob, cenb=ct.Earth):
+        """
+        This function compute aerodynamic force coefficient in Body frame for a spacecraft at given orientation and at given state.
+        This function assumme that spacecraft is "Rectangular Prism".
+            
+        Inputs
+        ------
+        alpha = Angle of Attack / Negative of Pitch angle (degrees)
+        beta = Sideslip Angle / Negative of Yaw angle (degrees)
+        r_mag = Position magnitude (km)
+        v_mag = Velocity magnitude (km/s)
+        ob = Orbiting Body
+        cb = Central Body (Earth is default choice)
+        
+        Outputs
+        -------
+        C_A, C_S, C_N = aerodynamic force coefficient (Axial, Side, Normal)
+
+        """
+        # Object properties
+        T_wall = ob["T_wall"]
+        sigma_N = ob["sigma_N"]
+        sigma_T = ob["sigma_T"]
+        lx, ly, lz = ob["lx"], ob["ly"], ob["lz"]
+
+        # Atmosphere
+        ds    = ussa1976.compute(z=np.array([(r_mag-cenb["radius"]) * 1000]), variables=["p", "rho", "t"])
+        rho   = ds["rho"].values[0]
+        T_inf = ds["t"].values[0]
+        p     = ds["p"].values[0]
+        s     = (v_mag) / np.sqrt(2 * (p / rho))
+        Tr    = T_wall / T_inf
+
+        # Trig shorthands
+        ca, sa = np.cos(np.radians(alpha)), np.sin(np.radians(alpha))
+        cb, sb = np.cos(np.radians(beta)),  np.sin(np.radians(beta))
+
+        # C_A
+        u = ca * cb
+        term1 = ( ((2 - sigma_N)/(s * np.sqrt(np.pi)) * u) + (np.sign(u) * (sigma_N/(2*s**2)) * np.sqrt(Tr)) ) * (np.exp(-s**2 * u**2))
+        term2 = (2 - sigma_N) * (u**2 + (1/(2*s**2))) * (np.sign(u) + erf(s*u))
+        term3 = (sigma_N/(2*s) * u * np.sqrt(np.pi*Tr)) * (1 + np.sign(u)*erf(s*u))
+        term4 = (sigma_T*u*(lx/ly)) * ( (1/(s*np.sqrt(np.pi)) * np.exp(-s**2 * sb**2)) + (sb*(np.sign(sb)+erf(s*sb))) )
+        term5 = (sigma_T*u*(lx/lz)) * ( (1/(s*np.sqrt(np.pi)) * np.exp(-s**2 * sa**2 * cb**2)) + (sa*cb*(erf(s*sa*cb)+np.sign(sa*cb))) )
+        C_A = term1 + term2 + term3 + term4 + term5
+
+        # C_S
+        term6 = (lx/ly) * ( ((2 - sigma_N)/(s * np.sqrt(np.pi)) * sb) + (np.sign(sb) * (sigma_N/(2*s**2)) * np.sqrt(Tr)) ) * (np.exp(-s**2 * sb**2))
+        term7 = (lx/ly) * (2 - sigma_N) * (sb**2 + (1/(2*s**2))) * (np.sign(sb) + erf(s*sb))
+        term8 = (lx/ly) * (sigma_N/(2*s) * sb * np.sqrt(np.pi*Tr)) * (1 + np.sign(sb)*erf(s*sb))
+        term9 = (sigma_T*sb) * ( (1/(s*np.sqrt(np.pi)) * np.exp(-s**2 * u**2)) + (u*(erf(s*u)+np.sign(u))) )
+        term10 = (sigma_T*sb*(lx/lz)) * ( (1/(s*np.sqrt(np.pi)) * np.exp(-s**2 * sa**2 * cb**2)) + (sa*cb*(erf(s*sa*cb)+np.sign(sa*cb))) )
+        C_S = term6 + term7 + term8 + term9 + term10
+
+        # C_N
+        y = sa * cb
+        term11 = (lx/lz) * ( ((2 - sigma_N)/(s * np.sqrt(np.pi)) * y) + (np.sign(y) * (sigma_N/(2*s**2)) * np.sqrt(Tr)) ) * (np.exp(-s**2 * y**2))
+        term12 = (lx/lz) * (2 - sigma_N) * (y**2 + (1/(2*s**2))) * (np.sign(y) + erf(s*y))
+        term13 = (lx/lz) * (sigma_N/(2*s) * y * np.sqrt(np.pi*Tr)) * (1 + np.sign(y)*erf(s*y))
+        term14 = (sigma_T*y) * ( (1/(s*np.sqrt(np.pi)) * np.exp(-s**2 * u**2)) + (u*(erf(s*u)+np.sign(u))) )
+        term15 = (sigma_T*y*(lx/ly)) * ( (1/(s*np.sqrt(np.pi)) * np.exp(-s**2 * sb**2)) + (sb*(erf(s*sb)+np.sign(sb))) )
+        C_N = term11 + term12 + term13 + term14 + term15
+
+        return C_A, C_S, C_N
+
+
+    # This function compute drag coefficient for a spacecraft at given state.
+    # This function assumme that spacecraft is "Sphere".
+    def get_DragCoefficient_Sphere(r_mag, v_mag, ob, cenb=ct.Earth):
+        """
+        This function compute drag coefficient for a spacecraft at given state.
+        This function assumme that spacecraft is "Sphere".
+            
+        Inputs
+        ------
+        r_mag = Position magnitude (km)
+        v_mag = Velocity magnitude (km/s)
+        ob = Orbiting Body
+        cb = Central Body (Earth is default choice)
+        
+        Outputs
+        -------
+        C_D = Drag coefficient
+
+        """
+        # Object properties
+        T_wall = ob["T_wall"]
+        sigma_N = ob["sigma_N"]
+        sigma_T = ob["sigma_T"]
+
+        # Atmosphere at given altitude
+        ds = ussa1976.compute(z=np.array([(r_mag-cenb["radius"]) *1000]), variables=["p", "rho", "t"])
+        rho   = ds["rho"].values[0]
+        T_inf = ds["t"].values[0]
+        p     = ds["p"].values[0]
+        s     = (v_mag) / np.sqrt(2 * (p / rho))
+
+        # C_D formula
+        term1 = (2 - sigma_N + sigma_T) * (0.5 +
+            0.5 * erf(s) * (1 + 1/s**2 - 1/(4*s**4)) +
+            (1 + 2*s**2) * np.exp(-s**2) / (4*s**3*np.sqrt(np.pi)))
+        term2 = (sigma_N / (3*s)) * np.sqrt(np.pi * (T_wall/T_inf)) * (1 + erf(s))
+        term3 = (2 - sigma_N)/(2*s**2) 
+        term4 = (sigma_N/(6*s**4)) * (1 + (2*s**2 - 1)*np.exp(-s**2)) * np.sqrt(T_wall/T_inf)
+        C_D = term1 + term2 + term3 + term4
+
+        return C_D
